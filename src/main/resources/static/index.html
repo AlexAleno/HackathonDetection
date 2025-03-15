@@ -178,7 +178,7 @@
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            url: result.data.url
+                            image_data: result.data.url
                         })
                     });
 
@@ -186,6 +186,7 @@
                         const serverResult = await serverResponse.json();
                         document.getElementById('resultImage').innerHTML = `
                             <p>${typeof serverResult === 'object' ? JSON.stringify(serverResult) : serverResult}</p>`;
+
                     }
                 } catch (serverError) {
                     console.error('Error sending to local server:', serverError);
