@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Is this Recyclable?</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      color: #4CAF50;
+      font-size: 36px;
+      margin-bottom: 40px;
+    }
+
+    .form-container {
+      border: 1px solid #ddd;
+      padding: 30px;
+      border-radius: 10px;
+      background-color: #fff;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      background-color: #f7f7f7;
+      font-size: 14px;
+    }
+
+    input[type="file"] {
+      padding: 10px 12px;
+    }
+
+    input[type="file"]:hover {
+      border-color: #4CAF50;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .preview {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .preview img {
+      max-width: 100%;
+      max-height: 350px;
+      border-radius: 6px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+      font-size: 20px;
+      color: #4CAF50;
+    }
+
+    .loading:after {
+      content: "...";
+      animation: dots 1.5s steps(5, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: "."; }
+      40% { content: ".."; }
+      60%, 100% { content: "..."; }
+    }
+
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+      display: none;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .prediction-result {
+      text-align: center;
+      margin-top: 20px;
+      padding: 25px;
+      font-size: 28px;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+
+    .prediction-organic {
+      background-color: #f0e68c;
+      color: #8b4513;
+    }
+
+    .prediction-recycling {
+      background-color: #add8e6;
+      color: #00008b;
+    }
+
+    .confidence {
+      font-size: 18px;
+      margin-top: 12px;
+      font-weight: normal;
+    }
+
+    .probability-bars {
+      margin-top: 25px;
+    }
+
+    .probability-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .probability-label {
+      width: 120px;
+      font-weight: 600;
+    }
+
+    .bar-container {
+      flex-grow: 1;
+      background-color: #f0f0f0;
+      border-radius: 6px;
+      height: 18px;
+      margin: 0 10px;
+    }
+
+    .bar {
+      height: 100%;
+      border-radius: 6px;
+    }
+
+    .bar-organic {
+      background-color: #f0e68c;
+    }
+
+    .bar-recycling {
+      background-color: #add8e6;
+    }
+
+    .probability-value {
+      width: 60px;
+      text-align: right;
+      font-weight: bold;
+      color: #555;
+    }
+
+  </style>
+</head>
+<body>
+<h1>Is this Recyclable?</h1>
+<div class="form-container">
+  <form id="uploadForm">
+    <div class="form-group">
+      <label for="imageFile">Select Image:</label>
+      <input type="file" id="imageFile" name="image" accept="image/*" required>
+    </div>
+    <div class="form-group preview" id="imagePreview">
+      <label>Image Preview:</label>
+      <img id="preview" src="#" alt="Preview">
+    </div>
+    <button type="submit">Classify Image</button>
+  </form>
+</div>
+
+<div id="loadingIndicator" class="loading">Processing image</div>
+
+<div class="result" id="resultContainer">
+  <div id="predictionResult"></div>
+  <div id="probabilityBars" class="probability-bars"></div>
+</div>
+
+<script>
+  const API_ENDPOINT = "http://localhost:65535/predict";
+
+  // Preview the selected image
+  document.getElementById('imageFile').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('preview').src = e.target.result;
+        document.getElementById('imagePreview').style.display = 'block';
+      }
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Handle form submission
+  document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const imageFile = document.getElementById('imageFile').files[0];
+
+    if (!imageFile) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Show loading indicator
+    document.getElementById('loadingIndicator').style.display = 'block';
+    // Hide previous results
+    document.getElementById('resultContainer').style.display = 'none';
+
+    try {
+      const formData = new FormData();
+      formData.append('image', imageFile);
+
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Hide loading indicator
+      document.getElementById('loadingIndicator').style.display = 'none';
+
+      // Display the result
+      displayResult(result);
+
+    } catch (error) {
+      console.error('Error classifying image:', error);
+
+      try {
+        const base64Image = await convertToBase64(imageFile);
+
+        const response = await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            image_data: base64Image
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+        displayResult(result);
+
+      } catch (fallbackError) {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('resultContainer').innerHTML = `
+                        <h3>Classification Failed</h3>
+                        <p>Error: ${error.message}</p>
+                        <p>Fallback error: ${fallbackError.message}</p>`;
+        document.getElementById('resultContainer').style.display = 'block';
+      }
+    }
+  });
+
+  // Convert image to base64
+  function convertToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Display the classification result
+  function displayResult(result) {
+    if (result.error) {
+      document.getElementById('resultContainer').innerHTML = `
+                    <h3>Classification Failed</h3>
+                    <p>Error: ${result.error}</p>`;
+    } else {
+      const predictionClass = result.prediction.toLowerCase();
+      const confidence = (result.confidence * 100).toFixed(1);
+
+      document.getElementById('predictionResult').innerHTML = `
+                    <div class="prediction-result prediction-${predictionClass}">
+                        This item is: ${result.prediction.toUpperCase()}
+                        <div class="confidence">Confidence: ${confidence}%</div>
+                    </div>`;
+
+      let barsHtml = '';
+      for (const [className, probability] of Object.entries(result.probabilities)) {
+        const probabilityPercent = (probability * 100).toFixed(1);
+        barsHtml += `
+                        <div class="probability-bar">
+                            <div class="probability-label">${className}:</div>
+                            <div class="bar-container">
+                                <div class="bar bar-${className.toLowerCase()}" style="width: ${probabilityPercent}%"></div>
+                            </div>
+                            <div class="probability-value">${probabilityPercent}%</div>
+                        </div>`;
+      }
+
+      document.getElementById('probabilityBars').innerHTML = barsHtml;
+      document.getElementById('resultContainer').style.display = 'block';
+    }
+  }
+</script>
+</body>
+</html>
